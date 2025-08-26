@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>📋 Acta de Mantenimiento</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+    <div class="container">
+        <h1>Acta de Mantenimiento</h1>
+        <hr>
+
+        <form id="actaForm">
+            <label for="entidad">Entidad:</label>
+            <select id="entidad">
+                <option value="E.S.E SaludYa Yacuanquer-Nariño">E.S.E SaludYa Yacuanquer-Nariño</option>
+                <option value="Alcaldia Municipal Yacuanquer-Nariño">Alcaldia Municipal Yacuanquer-Nariño</option>
+            </select>
+
+            <label for="actaNum">Número de Acta:</label>
+            <input type="text" id="actaNum" required>
+
+            <label for="fecha">Fecha:</label>
+            <input type="date" id="fecha" required>
+
+            <label for="hora">Hora:</label>
+            <input type="time" id="hora" required>
+
+            <label for="area">Área:</label>
+            <input type="text" id="area" required>
+
+            <label for="realizadoPor">Realizado por:</label>
+            <input type="text" id="realizadoPor" required>
+
+            <label for="descripcion">Descripción de la Actividad:</label>
+            <textarea id="descripcion" rows="4" required></textarea>
+
+            <label for="participantes">Participantes:</label>
+            <textarea id="participantes" rows="2"></textarea>
+
+            <label for="observacion">Observación:</label>
+            <textarea id="observacion" rows="4"></textarea>
+
+            <label>Fotos de Evidencia:</label>
+            <div class="photos-container">
+                <label for="photo1" class="photo-btn">
+                    <span>📷 Foto 1</span>
+                    <input type="file" id="photo1" accept="image/*" capture="camera">
+                </label>
+                <label for="photo2" class="photo-btn">
+                    <span>📷 Foto 2</span>
+                    <input type="file" id="photo2" accept="image/*" capture="camera">
+                </label>
+                <label for="photo3" class="photo-btn">
+                    <span>📷 Foto 3</span>
+                    <input type="file" id="photo3" accept="image/*" capture="camera">
+                </label>
+            </div>
+            
+            <label for="nombreFirma">Nombre de quien firma:</label>
+            <input type="text" id="nombreFirma" required>
+
+            <label>Firma:</label>
+            <div class="signature-container">
+                <canvas id="signatureCanvas"></canvas>
+            </div>
+        </form>
+        
+        <div class="buttons-container">
+            <button id="saveActa">✅ Guardar Acta</button>
+            <button id="clearSignature">🧹 Limpiar Firma</button>
+        </div>
+    </div>
+    
+    <div class="container actas-container">
+        <h2>Actas Guardadas</h2>
+        <hr>
+        <div class="export-buttons-container">
+            <button id="exportAllActas">📄 Exportar Todas las Actas</button>
+            <button id="exportAllPhotos">🖼️ Exportar Todas las Fotos</button>
+        </div>
+        <ul id="actasList">
+        </ul>
+    </div>
+    
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/signature_pad@4.0.0/dist/signature_pad.umd.min.js"></script>
+    <script src="script.js"></script>
+</body>
+</html>
