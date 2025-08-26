@@ -1,263 +1,180 @@
 // Variable global para almacenar las actas
 let actas = [];
 
-// Función para obtener las coordenadas de la firma
-function getSignatureCoordinates(signaturePad) {
-    const points = signaturePad.toData();
-    if (points.length === 0) {
-        return "No hay firma";
-    }
+// Inicialización de jsPDF y SignaturePad
+const { jsPDF } = window.jspdf;
 
-    const coordinates = points.map(stroke => {
-        return stroke.points.map(point => ({ x: point.x, y: point.y }));
+const canvas = document.getElementById('signatureCanvas');
+const signaturePad = new SignaturePad(canvas);
+
+// Ajustar el canvas al tamaño del contenedor
+function resizeCanvas() {
+    const ratio = Math.max(window.devicePixelRatio || 1, 1);
+    canvas.width = canvas.offsetWidth * ratio;
+    canvas.height = canvas.offsetHeight * ratio;
+    canvas.getContext("2d").scale(ratio, ratio);
+    signaturePad.clear();
+}
+window.addEventListener('resize', resizeCanvas);
+resizeCanvas();
+
+// Elementos del DOM
+const entidadSelect = document.getElementById('entidad');
+const actaNumInput = document.getElementById('actaNum');
+const fechaInput = document.getElementById('fecha');
+const horaInput = document.getElementById('hora');
+const areaInput = document.getElementById('area');
+const realizadoPorInput = document.getElementById('realizadoPor');
+const descripcionInput = document.getElementById('descripcion');
+const participantesInput = document.getElementById('participantes');
+const observacionInput = document.getElementById('observacion');
+const nombreFirmaInput = document.getElementById('nombreFirma');
+const photoInputs = [
+    document.getElementById('photo1'),
+    document.getElementById('photo2'),
+    document.getElementById('photo3')
+];
+const saveActaBtn = document.getElementById('saveActa');
+const clearSignatureBtn = document.getElementById('clearSignature');
+const actasList = document.getElementById('actasList');
+const exportAllActasBtn = document.getElementById('exportAllActas');
+const exportAllPhotosBtn = document.getElementById('exportAllPhotos');
+
+// Función auxiliar para leer un archivo como Base64
+function readFileAsBase64(file) {
+    return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result);
+        reader.onerror = () => reject(reader.error);
+        reader.readAsDataURL(file);
     });
-    
-    return JSON.stringify(coordinates);
 }
 
-// Función para guardar una nueva acta en el arreglo y el localStorage
-function saveActa(event) {
+// Función para guardar un acta
+async function saveActa(event) {
     event.preventDefault();
 
-    // Validar que los campos requeridos no estén vacíos
-    const entidad = document.getElementById('entidad').value;
-    const actaNum = document.getElementById('actaNum').value;
-    const fecha = document.getElementById('fecha').value;
-    const hora = document.getElementById('hora').value;
-    const area = document.getElementById('area').value;
-    const realizadoPor = document.getElementById('realizadoPor').value;
-    const descripcion = document.getElementById('descripcion').value;
-    const nombreFirma = document.getElementById('nombreFirma').value;
+    const entidad = entidadSelect.value;
+    const actaNum = actaNumInput.value;
+    const fecha = fechaInput.value;
+    const hora = horaInput.value;
+    const area = areaInput.value;
+    const realizadoPor = realizadoPorInput.value;
+    const descripcion = descripcionInput.value;
+    const participantes = participantesInput.value;
+    const observacion = observacionInput.value;
+    const nombreFirma = nombreFirmaInput.value;
 
-    if (!actaNum || !fecha || !hora || !area || !realizadoPor || !descripcion || !nombreFirma || signaturePad.isEmpty()) {
-        alert("Por favor, rellena todos los campos obligatorios y firma el acta.");
+    if (signaturePad.isEmpty() || !actaNum || !entidad || !fecha || !hora || !area || !realizadoPor || !descripcion || !nombreFirma) {
+        alert("El número de acta, la entidad, los datos del acta y la firma son obligatorios.");
         return;
     }
-    
-    // Obtener la URL de la firma como imagen
-    const firmaDataUrl = signaturePad.toDataURL();
-    
-    // Obtener las coordenadas de la firma
-    const firmaCoords = getSignatureCoordinates(signaturePad);
-    
-    // Convertir las fotos a Base64 para guardarlas en el arreglo
-    const photos = [];
-    const photoInputs = document.querySelectorAll('.photos-container input[type="file"]');
 
-    const promises = Array.from(photoInputs).map(input => {
-        return new Promise((resolve, reject) => {
-            if (input.files.length > 0) {
-                const reader = new FileReader();
-                reader.onload = () => {
-                    photos.push(reader.result);
-                    resolve();
-                };
-                reader.onerror = reject;
-                reader.readAsDataURL(input.files[0]);
-            } else {
-                resolve();
-            }
-        });
-    });
+    const photosBase64 = [];
+    for (const input of photoInputs) {
+        if (input.files.length > 0) {
+            const file = input.files[0];
+            photosBase64.push(await readFileAsBase64(file));
+        } else {
+            photosBase64.push(null);
+        }
+    }
 
-    Promise.all(promises).then(() => {
-        const nuevaActa = {
-            id: Date.now(),
-            entidad,
-            actaNum,
-            fecha,
-            hora,
-            area,
-            realizadoPor,
-            descripcion,
-            participantes: document.getElementById('participantes').value,
-            observacion: document.getElementById('observacion').value,
-            nombreFirma,
-            firma: firmaDataUrl,
-            firmaCoords,
-            fotos: photos.filter(photo => photo !== null), // Filtrar fotos que no se subieron
-        };
+    const acta = {
+        id: Date.now(),
+        entidad,
+        actaNum,
+        fecha,
+        hora,
+        area,
+        realizadoPor,
+        descripcion,
+        participantes,
+        observacion,
+        nombreFirma,
+        firma: signaturePad.toDataURL("image/png"),
+        fotos: photosBase64
+    };
 
-        actas.push(nuevaActa);
-        localStorage.setItem('actas', JSON.stringify(actas));
+    actas.push(acta);
+    localStorage.setItem('actas', JSON.stringify(actas));
 
-        // Limpiar el formulario después de guardar
-        document.getElementById('actaForm').reset();
-        signaturePad.clear();
-
-        renderActas();
-        alert('✅ Acta guardada con éxito!');
-    }).catch(error => {
-        console.error('Error al leer los archivos:', error);
-        alert('Hubo un error al guardar el acta.');
-    });
+    document.getElementById('actaForm').reset();
+    signaturePad.clear();
+    loadActas();
+    alert('Acta guardada con éxito.');
 }
 
-// Función para renderizar la lista de actas guardadas
-function renderActas() {
-    const actasList = document.getElementById('actasList');
-    actasList.innerHTML = '';
+// Función para cargar y mostrar las actas
+function loadActas() {
+    const storedActas = localStorage.getItem('actas');
+    if (storedActas) {
+        actas = JSON.parse(storedActas);
+    }
     
+    actasList.innerHTML = '';
     actas.forEach(acta => {
         const li = document.createElement('li');
         li.className = 'acta-item';
-        
-        const fechaHora = `${acta.fecha} - ${acta.hora}`;
-        const nombreEntidad = `Entidad: ${acta.entidad}`;
-        
         li.innerHTML = `
             <h3>Acta N°: ${acta.actaNum}</h3>
-            <p><strong>Fecha y Hora:</strong> ${fechaHora}</p>
-            <p><strong>Entidad/Área:</strong> ${nombreEntidad}</p>
-            <p><strong>Realizado por:</strong> ${acta.realizadoPor}</p>
+            <p><strong>Entidad:</strong> ${acta.entidad}</p>
+            <p><strong>Área:</strong> ${acta.area}</p>
             <div class="acta-item-buttons">
-                <button class="export-btn" onclick="exportSingleActa(${acta.id})">📄 Exportar</button>
-                <button class="delete-btn" onclick="deleteActa(${acta.id})">🗑️ Borrar</button>
+                <button class="export-btn" data-id="${acta.id}">Exportar PDF</button>
+                <button class="delete-btn" data-id="${acta.id}">Borrar</button>
             </div>
         `;
         actasList.appendChild(li);
     });
-}
-
-// Función para eliminar un acta individual
-function deleteActa(id) {
-    if (confirm('¿Estás seguro de que quieres borrar esta acta?')) {
-        actas = actas.filter(acta => acta.id !== id);
-        localStorage.setItem('actas', JSON.stringify(actas));
-        renderActas();
-        alert('🗑️ Acta eliminada.');
-    }
-}
-
-// Función para exportar una sola acta a PDF
-function exportSingleActa(id) {
-    const acta = actas.find(a => a.id === id);
-    if (!acta) {
-        alert('Acta no encontrada.');
-        return;
-    }
     
-    generateActaPdf(acta);
-}
-
-// Función para exportar todas las actas a un solo PDF
-function exportAllActas() {
-    if (actas.length === 0) {
-        alert('No hay actas guardadas para exportar.');
-        return;
-    }
-    
-    const doc = new window.jspdf.jsPDF();
-    let y = 10;
-    const margin = 10;
-    const lineHeight = 7;
-    const pageHeight = doc.internal.pageSize.getHeight();
-
-    actas.forEach((acta, index) => {
-        if (index > 0) {
-            doc.addPage();
-            y = margin;
-        }
-        
-        doc.setFontSize(18);
-        doc.text(`Acta de Mantenimiento N°: ${acta.actaNum}`, doc.internal.pageSize.getWidth() / 2, y, { align: 'center' });
-        y += 10;
-        doc.setFontSize(12);
-
-        const fields = {
-            "Entidad": acta.entidad,
-            "Fecha": acta.fecha,
-            "Hora": acta.hora,
-            "Área": acta.area,
-            "Realizado por": acta.realizadoPor,
-            "Descripción de la Actividad": acta.descripcion,
-            "Participantes": acta.participantes,
-            "Observación": acta.observacion,
-            "Nombre de quien firma": acta.nombreFirma,
-        };
-        
-        for (const [key, value] of Object.entries(fields)) {
-            if (value) {
-                const text = `${key}: ${value}`;
-                const splitText = doc.splitTextToSize(text, 180);
-                doc.text(splitText, margin, y);
-                y += splitText.length * lineHeight;
-            }
-        }
-        
-        // Agregar la firma
-        if (acta.firma && acta.firma !== "data:image/png;base64,iVBORw0KGgoAAA...") {
-            if (y + 50 > pageHeight - margin) {
-                doc.addPage();
-                y = margin;
-            }
-            doc.text('Firma:', margin, y + 5);
-            doc.addImage(acta.firma, 'PNG', margin, y + 10, 80, 40);
-        }
-
-        y += 50; // Espacio para la firma
-    });
-
-    doc.save('todas_las_actas.pdf');
-    alert('✅ PDF de todas las actas generado con éxito!');
-}
-
-// Función para exportar todas las fotos a un solo PDF
-function exportAllPhotos() {
-    if (actas.length === 0) {
-        alert('No hay fotos para exportar.');
-        return;
-    }
-    
-    const doc = new window.jspdf.jsPDF('p', 'mm', 'a4');
-    let y = 10;
-    const margin = 10;
-    const pageHeight = doc.internal.pageSize.getHeight();
-
-    actas.forEach(acta => {
-        acta.fotos.forEach((foto, index) => {
-            const img = new Image();
-            img.onload = () => {
-                const imgWidth = 190;
-                const imgHeight = (img.height * imgWidth) / img.width;
-                
-                if (y + imgHeight + 20 > pageHeight) {
-                    doc.addPage();
-                    y = margin;
-                }
-                
-                doc.setFontSize(12);
-                doc.text(`Acta N° ${acta.actaNum} - Foto ${index + 1}`, margin, y);
-                y += 5;
-                
-                doc.addImage(foto, 'JPEG', margin, y, imgWidth, imgHeight);
-                y += imgHeight + 10; // Espacio entre fotos
-            };
-            img.src = foto;
+    document.querySelectorAll('.export-btn').forEach(button => {
+        button.addEventListener('click', (e) => {
+            const id = e.target.dataset.id;
+            getActaAndExport(id);
         });
     });
 
-    setTimeout(() => {
-        doc.save('todas_las_fotos.pdf');
-        alert('🖼️ PDF de todas las fotos generado con éxito!');
-    }, 1500); // Pequeño retraso para que las imágenes se carguen
+    document.querySelectorAll('.delete-btn').forEach(button => {
+        button.addEventListener('click', (e) => {
+            const id = e.target.dataset.id;
+            deleteActa(id);
+        });
+    });
 }
 
-// Función para generar un PDF de una sola acta
-function generateActaPdf(acta) {
-    const doc = new window.jspdf.jsPDF();
-    let y = 10;
+// Función para obtener un acta por ID y exportarla a PDF
+function getActaAndExport(id) {
+    const acta = actas.find(a => a.id == id);
+    if (acta) {
+        generatePDF(acta);
+    }
+}
+
+// Función para eliminar un acta
+function deleteActa(id) {
+    actas = actas.filter(a => a.id != id);
+    localStorage.setItem('actas', JSON.stringify(actas));
+    loadActas();
+    alert('Acta eliminada.');
+}
+
+// Función de generación de PDF
+function generatePDF(acta) {
+    const doc = new jsPDF();
+    let yPos = 10;
+    const pageWidth = doc.internal.pageSize.getWidth();
     const margin = 10;
     const lineHeight = 7;
-    const pageHeight = doc.internal.pageSize.getHeight();
 
     doc.setFontSize(18);
-    doc.text(`Acta de Mantenimiento N°: ${acta.actaNum}`, doc.internal.pageSize.getWidth() / 2, y, { align: 'center' });
-    y += 10;
+    doc.text('Acta de Mantenimiento', pageWidth / 2, yPos, { align: 'center' });
+    yPos += lineHeight * 2;
     doc.setFontSize(12);
 
     const fields = {
         "Entidad": acta.entidad,
+        "Número de Acta": acta.actaNum,
         "Fecha": acta.fecha,
         "Hora": acta.hora,
         "Área": acta.area,
@@ -265,88 +182,152 @@ function generateActaPdf(acta) {
         "Descripción de la Actividad": acta.descripcion,
         "Participantes": acta.participantes,
         "Observación": acta.observacion,
-        "Nombre de quien firma": acta.nombreFirma,
+        "Nombre de quien firma": acta.nombreFirma
     };
-    
+
     for (const [key, value] of Object.entries(fields)) {
         if (value) {
             const text = `${key}: ${value}`;
-            const splitText = doc.splitTextToSize(text, 180);
-            doc.text(splitText, margin, y);
-            y += splitText.length * lineHeight;
+            const splitText = doc.splitTextToSize(text, pageWidth - margin * 2);
+            doc.text(splitText, margin, yPos);
+            yPos += (splitText.length * lineHeight);
         }
     }
-    
-    // Agregar la firma
-    if (acta.firma && acta.firma !== "data:image/png;base64,iVBORw0KGgoAAA...") {
-        if (y + 50 > pageHeight - margin) {
-            doc.addPage();
-            y = margin;
+
+    yPos += 15;
+
+    // Firma
+    if (acta.firma) {
+        doc.text('Firma:', margin, yPos);
+        yPos += 5;
+        doc.addImage(acta.firma, 'PNG', margin, yPos, 80, 40);
+        yPos += 50;
+    }
+
+    // Fotos de evidencia
+    acta.fotos.forEach((photoData, index) => {
+        if (photoData) {
+            if (yPos + 80 > doc.internal.pageSize.getHeight()) {
+                doc.addPage();
+                yPos = 10;
+            }
+            doc.text(`Foto de Evidencia: ${index + 1}`, margin, yPos);
+            yPos += 5;
+            const imgWidth = pageWidth - margin * 2;
+            doc.addImage(photoData, 'JPEG', margin, yPos, imgWidth, imgWidth * 0.75);
+            yPos += imgWidth * 0.75 + 15;
         }
-        doc.text('Firma:', margin, y + 5);
-        doc.addImage(acta.firma, 'PNG', margin, y + 10, 80, 40);
-    }
-
-    y += 50; // Espacio para la firma
-
-    // Agregar las fotos
-    if (acta.fotos.length > 0) {
-        doc.text('Fotos de Evidencia:', margin, y + 10);
-        y += 15;
-        
-        acta.fotos.forEach((photoData, index) => {
-            const img = new Image();
-            img.onload = () => {
-                const imgWidth = 190;
-                const imgHeight = (img.height * imgWidth) / img.width;
-
-                if (y + imgHeight + 20 > pageHeight) {
-                    doc.addPage();
-                    y = margin;
-                }
-
-                doc.text(`Foto ${index + 1}:`, margin, y);
-                y += 5;
-                doc.addImage(photoData, 'JPEG', margin, y, imgWidth, imgHeight);
-                y += imgHeight + 10;
-            };
-            img.src = photoData;
-        });
-    }
+    });
 
     setTimeout(() => {
-        doc.save(`acta-${acta.actaNum}.pdf`);
-    }, 1500); // Pequeño retraso para que las imágenes se carguen
+        doc.save(`acta-${acta.entidad}-${acta.actaNum}.pdf`);
+    }, 1000);
 }
 
-// Configuración inicial del canvas de firma
-const canvas = document.getElementById('signatureCanvas');
-const signaturePad = new SignaturePad(canvas, {
-    backgroundColor: 'rgb(255, 255, 255)'
-});
-
-// Función para ajustar el tamaño del canvas
-function resizeCanvas() {
-    const ratio = Math.max(window.devicePixelRatio || 1, 1);
-    canvas.width = canvas.offsetWidth * ratio;
-    canvas.height = canvas.offsetHeight * ratio;
-    canvas.getContext('2d').scale(ratio, ratio);
-    signaturePad.clear();
-}
-window.addEventListener('resize', resizeCanvas);
-
-// Cargar las actas guardadas al iniciar la página
-document.addEventListener('DOMContentLoaded', () => {
-    const savedActas = localStorage.getItem('actas');
-    if (savedActas) {
-        actas = JSON.parse(savedActas);
-        renderActas();
+// Función para exportar todas las actas
+function exportAllActas() {
+    if (actas.length === 0) {
+        alert('No hay actas guardadas para exportar.');
+        return;
     }
-    resizeCanvas(); // Asegurar que el canvas tenga el tamaño correcto al cargar
-});
 
-// Asignar eventos a los botones
-document.getElementById('saveActa').addEventListener('click', saveActa);
-document.getElementById('clearSignature').addEventListener('click', () => signaturePad.clear());
-document.getElementById('exportAllActas').addEventListener('click', exportAllActas);
-document.getElementById('exportAllPhotos').addEventListener('click', exportAllPhotos);
+    const doc = new jsPDF();
+    let yPos = 10;
+    const pageWidth = doc.internal.pageSize.getWidth();
+    const margin = 10;
+    const lineHeight = 7;
+    const pageHeight = doc.internal.pageSize.getHeight();
+
+    actas.forEach((acta, index) => {
+        if (index > 0) {
+            doc.addPage();
+            yPos = 10;
+        }
+
+        doc.setFontSize(18);
+        doc.text('Acta de Mantenimiento', pageWidth / 2, yPos, { align: 'center' });
+        yPos += lineHeight * 2;
+        doc.setFontSize(12);
+
+        const fields = {
+            "Entidad": acta.entidad,
+            "Número de Acta": acta.actaNum,
+            "Fecha": acta.fecha,
+            "Hora": acta.hora,
+            "Área": acta.area,
+            "Realizado por": acta.realizadoPor,
+            "Descripción de la Actividad": acta.descripcion,
+            "Participantes": acta.participantes,
+            "Observación": acta.observacion,
+            "Nombre de quien firma": acta.nombreFirma
+        };
+
+        for (const [key, value] of Object.entries(fields)) {
+            if (value) {
+                const text = `${key}: ${value}`;
+                const splitText = doc.splitTextToSize(text, pageWidth - margin * 2);
+                doc.text(splitText, margin, yPos);
+                yPos += (splitText.length * lineHeight);
+            }
+        }
+
+        yPos += 15;
+        if (acta.firma) {
+            if (yPos + 50 > pageHeight) {
+                doc.addPage();
+                yPos = 10;
+            }
+            doc.text('Firma:', margin, yPos);
+            yPos += 5;
+            doc.addImage(acta.firma, 'PNG', margin, yPos, 80, 40);
+            yPos += 50;
+        }
+    });
+
+    setTimeout(() => {
+        doc.save('Todas_las_actas.pdf');
+    }, 1000);
+}
+
+// Función para exportar todas las fotos
+function exportAllPhotos() {
+    if (actas.length === 0) {
+        alert('No hay fotos para exportar.');
+        return;
+    }
+
+    const doc = new jsPDF('p', 'mm', 'a4');
+    let yPos = 10;
+    const pageWidth = doc.internal.pageSize.getWidth();
+    const margin = 10;
+    const pageHeight = doc.internal.pageSize.getHeight();
+
+    actas.forEach(acta => {
+        acta.fotos.forEach((photoData, index) => {
+            if (photoData) {
+                if (yPos + 80 > pageHeight) {
+                    doc.addPage();
+                    yPos = 10;
+                }
+                doc.text(`Acta: ${acta.actaNum} - Foto ${index + 1}`, margin, yPos);
+                yPos += 5;
+                const imgWidth = pageWidth - margin * 2;
+                doc.addImage(photoData, 'JPEG', margin, yPos, imgWidth, imgWidth * 0.75);
+                yPos += imgWidth * 0.75 + 15;
+            }
+        });
+    });
+
+    setTimeout(() => {
+        doc.save('Todas_las_fotos.pdf');
+    }, 1000);
+}
+
+// Asignar eventos
+document.addEventListener('DOMContentLoaded', () => {
+    loadActas();
+});
+saveActaBtn.addEventListener('click', saveActa);
+clearSignatureBtn.addEventListener('click', () => signaturePad.clear());
+exportAllActasBtn.addEventListener('click', exportAllActas);
+exportAllPhotosBtn.addEventListener('click', exportAllPhotos);
